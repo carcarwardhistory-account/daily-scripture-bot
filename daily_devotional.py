@@ -1,30 +1,20 @@
 import os
+import json
 import requests
 from weasyprint import HTML
 import smtplib
 from email.message import EmailMessage
-from datetime import date
+from datetime import datetime, date
 
 # ==========================================
 # ⚙️ CONFIGURATION
 # ==========================================
-# Pulls securely from GitHub Secrets (Do not hardcode passwords here)
 SENDER_EMAIL = os.environ.get("MY_EMAIL")
 APP_PASSWORD = os.environ.get("MY_PASSWORD")
 
-# Put your emails and start dates here!
-RECIPIENTS = [
-    {
-        "email": "carcarwardhistory@gmail.com", 
-        "start_date": date(2026, 10, 21)   # Change this to the date YOU actually started reading
-    },
-    # I have commented out your friend for now. 
-    # To add them later, remove the # symbols and put their real start date:
-    # {
-    #     "email": "onfreelance21@gmail.com", 
-    #     "start_date": date(2026, 10, 20) 
-    # }
-]
+# Load the recipients from the JSON file
+with open("recipients.json", "r") as file:
+    RECIPIENTS_DATA = json.load(file)
 
 BOOKS = [
     ("1nephi", 22), ("2nephi", 33), ("jacob", 7), ("enos", 1), 
@@ -43,11 +33,9 @@ def get_chapter_list():
 ALL_CHAPTERS = get_chapter_list()
 
 def get_todays_chapter(start_date):
-    # Calculates how many days have passed since the start date
     days_since_start = (date.today() - start_date).days
     if days_since_start < 0:
         days_since_start = 0
-    # Loops back to the beginning after 239 days
     index = days_since_start % len(ALL_CHAPTERS)
     return ALL_CHAPTERS[index]
 
@@ -117,9 +105,11 @@ def send_email(recipient_email, pdf_path, book_title, chapter_num):
 if __name__ == "__main__":
     downloaded_chapters = {}
 
-    for person in RECIPIENTS:
+    for person in RECIPIENTS_DATA:
         email = person["email"]
-        start_date = person["start_date"]
+        
+        # Convert the string "2026-10-20" into a Python date object
+        start_date = datetime.strptime(person["start_date"], "%Y-%m-%d").date()
         
         book_slug, chapter_num = get_todays_chapter(start_date)
         chapter_key = f"{book_slug}_{chapter_num}"
