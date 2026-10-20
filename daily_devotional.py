@@ -5,7 +5,7 @@ import requests
 from weasyprint import HTML
 import smtplib
 from email.message import EmailMessage
-from datetime import datetime, date
+from datetime import datetime, date, timezone, timedelta
 
 # ==========================================
 # ⚙️ CONFIGURATION
@@ -15,6 +15,9 @@ APP_PASSWORD = os.environ.get("MY_PASSWORD")
 
 # PASTE YOUR GOOGLE SHEET CSV LINK HERE
 SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSGoyE672gVHNvBmepQTssjlKa1teusxcwkxdMcgxVCDB0zgM5K5G579qQ-EZSw8hTYD6HsEbYWxV4G/pub?output=csv"
+
+# Set the timezone to Philippine Time (UTC+8)
+PHT = timezone(timedelta(hours=8))
 
 BOOKS = [
     ("1nephi", 22), ("2nephi", 33), ("jacob", 7), ("enos", 1), 
@@ -33,7 +36,10 @@ def get_chapter_list():
 ALL_CHAPTERS = get_chapter_list()
 
 def get_todays_chapter(start_date):
-    days_since_start = (date.today() - start_date).days
+    # Get the CURRENT date in Philippine Time, not the server's UTC time
+    today_pht = datetime.now(PHT).date()
+    
+    days_since_start = (today_pht - start_date).days
     if days_since_start < 0:
         days_since_start = 0
     index = days_since_start % len(ALL_CHAPTERS)
@@ -102,35 +108,33 @@ def send_email(recipient_email, pdf_path, book_title, chapter_num):
         smtp.send_message(msg)
     print(f"✅ Email sent successfully to {recipient_email}!")
 
-# ==========================================
-# FETCH DATA FROM GOOGLE SHEETS (ROBUST VERSION)
-# ==========================================
 def get_recipients_from_sheet():
     print("Downloading subscriber list from Google Sheets...")
     response = requests.get(SHEET_CSV_URL)
     response.raise_for_status()
     
     csv_data = csv.DictReader(io.StringIO(response.text))
-    
     recipients = []
     
-    # UPDATED: Matching your exact new question title
     EMAIL_HEADER = "Email Address"
     DATE_HEADER = "What date would you like to start reading?"
     
     for row in csv_data:
         if EMAIL_HEADER in row and DATE_HEADER in row:
+            # Pause feature
+            status = row.get("Status", "").strip().lower()
+            if status == "paused":
+                print(f"⏸️ Skipping {row[EMAIL_HEADER]} (Paused)")
+                continue
+
             email = row[EMAIL_HEADER].strip()
             date_str = row[DATE_HEADER].strip()
             
             try:
-                # Google Forms still outputs MM/DD/YYYY to the sheet behind the scenes
                 start_date = datetime.strptime(date_str, "%m/%d/%Y").date()
                 recipients.append({"email": email, "start_date": start_date})
             except ValueError:
                 print(f"Skipping row, invalid date format: {date_str}")
-        else:
-            print(f"Could not find correct columns in row. Available columns: {list(row.keys())}")
                 
     return recipients
 
