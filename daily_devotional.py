@@ -103,38 +103,39 @@ def send_email(recipient_email, pdf_path, book_title, chapter_num):
     print(f"✅ Email sent successfully to {recipient_email}!")
 
 # ==========================================
-# FETCH DATA FROM GOOGLE SHEETS
+# FETCH DATA FROM GOOGLE SHEETS (ROBUST VERSION)
 # ==========================================
 def get_recipients_from_sheet():
     print("Downloading subscriber list from Google Sheets...")
     response = requests.get(SHEET_CSV_URL)
     response.raise_for_status()
     
-    # Read the CSV data
-    csv_data = csv.reader(io.StringIO(response.text))
-    header = next(csv_data) # Skip the header row
+    csv_data = csv.DictReader(io.StringIO(response.text))
     
     recipients = []
+    
+    # UPDATED: Matching your exact new question title
+    EMAIL_HEADER = "Email Address"
+    DATE_HEADER = "What date would you like to start reading?"
+    
     for row in csv_data:
-        if len(row) >= 3:
-            # Google Forms usually outputs: Timestamp, Name, Email, Start Date
-            # Let's find the email and date regardless of column order
-            email = row[2].strip()
-            date_str = row[3].strip()
+        if EMAIL_HEADER in row and DATE_HEADER in row:
+            email = row[EMAIL_HEADER].strip()
+            date_str = row[DATE_HEADER].strip()
             
             try:
-                # Convert Google Form date (e.g., 10/20/2026) to Python date
+                # Google Forms still outputs MM/DD/YYYY to the sheet behind the scenes
                 start_date = datetime.strptime(date_str, "%m/%d/%Y").date()
                 recipients.append({"email": email, "start_date": start_date})
             except ValueError:
-                print(f"Skipping row, invalid date format: {row}")
+                print(f"Skipping row, invalid date format: {date_str}")
+        else:
+            print(f"Could not find correct columns in row. Available columns: {list(row.keys())}")
                 
     return recipients
 
 if __name__ == "__main__":
     downloaded_chapters = {}
-    
-    # Get the live list from Google Sheets!
     RECIPIENTS_DATA = get_recipients_from_sheet()
 
     for person in RECIPIENTS_DATA:
