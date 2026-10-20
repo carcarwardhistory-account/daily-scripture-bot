@@ -1,5 +1,6 @@
 import os
-import json
+import csv
+import io
 import requests
 from weasyprint import HTML
 import smtplib
@@ -12,9 +13,8 @@ from datetime import datetime, date
 SENDER_EMAIL = os.environ.get("MY_EMAIL")
 APP_PASSWORD = os.environ.get("MY_PASSWORD")
 
-# Load the recipients from the JSON file
-with open("recipients.json", "r") as file:
-    RECIPIENTS_DATA = json.load(file)
+# PASTE YOUR GOOGLE SHEET CSV LINK HERE
+SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSGoyE672gVHNvBmepQTssjlKa1teusxcwkxdMcgxVCDB0zgM5K5G579qQ-EZSw8hTYD6HsEbYWxV4G/pub?output=csv"
 
 BOOKS = [
     ("1nephi", 22), ("2nephi", 33), ("jacob", 7), ("enos", 1), 
@@ -102,14 +102,44 @@ def send_email(recipient_email, pdf_path, book_title, chapter_num):
         smtp.send_message(msg)
     print(f"✅ Email sent successfully to {recipient_email}!")
 
+# ==========================================
+# FETCH DATA FROM GOOGLE SHEETS
+# ==========================================
+def get_recipients_from_sheet():
+    print("Downloading subscriber list from Google Sheets...")
+    response = requests.get(SHEET_CSV_URL)
+    response.raise_for_status()
+    
+    # Read the CSV data
+    csv_data = csv.reader(io.StringIO(response.text))
+    header = next(csv_data) # Skip the header row
+    
+    recipients = []
+    for row in csv_data:
+        if len(row) >= 3:
+            # Google Forms usually outputs: Timestamp, Name, Email, Start Date
+            # Let's find the email and date regardless of column order
+            email = row[2].strip()
+            date_str = row[3].strip()
+            
+            try:
+                # Convert Google Form date (e.g., 10/20/2026) to Python date
+                start_date = datetime.strptime(date_str, "%m/%d/%Y").date()
+                recipients.append({"email": email, "start_date": start_date})
+            except ValueError:
+                print(f"Skipping row, invalid date format: {row}")
+                
+    return recipients
+
 if __name__ == "__main__":
     downloaded_chapters = {}
+    
+    # Get the live list from Google Sheets!
+    RECIPIENTS_DATA = get_recipients_from_sheet()
 
     for person in RECIPIENTS_DATA:
         email = person["email"]
-        
-        # Convert the string "2026-10-20" into a Python date object
-        start_date = datetime.strptime(person["start_date"], "%Y-%m-%d").date()
+        start_date = person["start_date"]
         
         book_slug, chapter_num = get_todays_chapter(start_date)
         chapter_key = f"{book_slug}_{chapter_num}"
