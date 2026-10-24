@@ -14,12 +14,10 @@ SENDER_EMAIL = os.environ.get("MY_EMAIL")
 APP_PASSWORD = os.environ.get("MY_PASSWORD")
 
 # PASTE YOUR GOOGLE SHEET CSV LINK HERE
-SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSGoyE672gVHNvBmepQTssjlKa1teusxcwkxdMcgxVCDB0zgM5K5G579qQ-EZSw8hTYD6HsEbYWxV4G/pub?output=csv"
+SHEET_CSV_URL = "PASTE_YOUR_CSV_LINK_HERE"
 
-# Philippine Timezone (UTC+8)
 PHT = timezone(timedelta(hours=8))
 
-# Map the Google Form choices to the API and the chapter lists
 VOLUMES = {
     "Book of Mormon": {
         "api_slug": "bookofmormon",
@@ -35,7 +33,7 @@ VOLUMES = {
     },
     "Doctrine and Covenants": {
         "api_slug": "dc-testament",
-        "books": [("dc", 138)] # D&C has 138 sections
+        "books": [("dc", 138)]
     },
     "Pearl of Great Price": {
         "api_slug": "pgp",
@@ -63,13 +61,7 @@ def get_todays_chapter(start_date, volume_name):
 
 def fetch_chapter(volume_name, book_slug, chapter_num):
     api_slug = VOLUMES[volume_name]["api_slug"]
-    
-    # D&C uses "sections" instead of "chapters" in the API URL structure
-    if volume_name == "Doctrine and Covenants":
-        url = f"https://openscriptureapi.org/api/scriptures/v1/lds/en/volume/{api_slug}/{book_slug}/{chapter_num}"
-    else:
-        url = f"https://openscriptureapi.org/api/scriptures/v1/lds/en/volume/{api_slug}/{book_slug}/{chapter_num}"
-        
+    url = f"https://openscriptureapi.org/api/scriptures/v1/lds/en/volume/{api_slug}/{book_slug}/{chapter_num}"
     response = requests.get(url, timeout=30)
     response.raise_for_status()
     return response.json()['chapter']
@@ -141,7 +133,6 @@ def get_recipients_from_sheet():
     
     recipients = []
     
-    # Matching the exact headers from your Google Form
     EMAIL_HEADER = "Email Address"
     DATE_HEADER = "What date would you like to start reading?"
     NAME_HEADER = "What is your name?"
@@ -149,25 +140,35 @@ def get_recipients_from_sheet():
     TIME_HEADER = "What time would you like to receive your daily email? (Philippine Time)"
     
     for row in csv_data:
-        if EMAIL_HEADER in row and DATE_HEADER in row:
+        if EMAIL_HEADER in row and DATE_HEADER in row and row[EMAIL_HEADER]:
             status = row.get("Status", "").strip().lower()
             if status == "paused":
                 continue
 
             email = row[EMAIL_HEADER].strip()
-            date_str = row[DATE_HEADER].strip()
-            name = row.get(NAME_HEADER, "Friend").strip()
-            volume = row.get(VOLUME_HEADER, "Book of Mormon").strip()
-            time_str = row.get(TIME_HEADER, "6:00 AM").strip()
+            date_str = row.get(DATE_HEADER, "").strip()
+            
+            # Handle missing data (for old form submissions) gracefully
+            name = row.get(NAME_HEADER, "").strip()
+            if not name:
+                name = "Friend"
+                
+            volume = row.get(VOLUME_HEADER, "").strip()
+            if volume not in VOLUMES:
+                volume = "Book of Mormon"
+                
+            time_str = row.get(TIME_HEADER, "").strip()
             
             try:
                 start_date = datetime.strptime(date_str, "%m/%d/%Y").date()
-                # Convert "6:00 AM" to just the hour integer (6)
-                preferred_hour = int(time_str.split(":")[0])
                 
-                # Ensure the volume choice is valid
-                if volume not in VOLUMES:
-                    volume = "Book of Mormon"
+                # Robust AM/PM time parsing
+                if not time_str:
+                    preferred_hour = 6 # Default to 6 AM if blank
+                else:
+                    # Example: "10:00 PM" becomes 22
+                    time_obj = datetime.strptime(time_str, "%I:%M %p")
+                    preferred_hour = time_obj.hour
                     
                 recipients.append({
                     "email": email, 
@@ -177,12 +178,11 @@ def get_recipients_from_sheet():
                     "hour": preferred_hour
                 })
             except Exception as e:
-                print(f"Skipping row, error: {e}")
+                print(f"Skipping row for {email}, error: {e}")
                 
     return recipients
 
 if __name__ == "__main__":
-    # 1. What time is it right now in the Philippines?
     current_hour = datetime.now(PHT).hour
     print(f"Current Hour in PHT: {current_hour}")
 
@@ -190,9 +190,8 @@ if __name__ == "__main__":
     RECIPIENTS_DATA = get_recipients_from_sheet()
 
     for person in RECIPIENTS_DATA:
-        # 2. Check if it's their preferred time
         if person["hour"] != current_hour:
-            continue # Skip them, it's not their time yet
+            continue
             
         email = person["email"]
         name = person["name"]
