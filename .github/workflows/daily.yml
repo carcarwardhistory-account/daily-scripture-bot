@@ -3,7 +3,7 @@ name: Send Daily Scripture
 on:
   schedule:
     # Runs at 10:00 PM UTC, which is 6:00 AM Philippine Time (UTC+8)
-    - cron: '0 22 * * *'
+    - cron: '0 20 * * *'
   workflow_dispatch: # This lets you click a button to test it manually
 
 jobs:
