@@ -41,6 +41,14 @@ VOLUMES = {
     }
 }
 
+def get_greeting(hour):
+    if 5 <= hour < 12:
+        return "Good morning"
+    elif 12 <= hour < 18:
+        return "Good afternoon"
+    else:
+        return "Good evening"
+
 def get_all_chapters(volume_name):
     chapters = []
     volume_data = VOLUMES[volume_name]
@@ -66,7 +74,7 @@ def fetch_chapter(volume_name, book_slug, chapter_num):
     response.raise_for_status()
     return response.json()['chapter']
 
-def build_pdf(chapter_data, filename, user_name):
+def build_pdf(chapter_data, filename, user_name, greeting):
     book_title = chapter_data['bookTitle']
     chapter_num = chapter_data['number']
     summary = chapter_data.get('summary', '')
@@ -98,7 +106,7 @@ def build_pdf(chapter_data, filename, user_name):
         </style>
     </head>
     <body>
-        <div class="greeting">Good morning, {user_name}!</div>
+        <div class="greeting">{greeting}, {user_name}!</div>
         <h1>{book_title} {chapter_num}</h1>
         <div class="summary">{summary}</div>
         <div class="content">{verses_html}</div>
@@ -108,12 +116,12 @@ def build_pdf(chapter_data, filename, user_name):
     HTML(string=html_content).write_pdf(filename)
     return filename
 
-def send_email(recipient_email, user_name, pdf_path, book_title, chapter_num):
+def send_email(recipient_email, user_name, greeting, pdf_path, book_title, chapter_num):
     msg = EmailMessage()
     msg['Subject'] = f"{user_name}, here is your daily reading: {book_title} {chapter_num}"
     msg['From'] = SENDER_EMAIL
     msg['To'] = recipient_email
-    msg.set_content(f"Good morning, {user_name}!\n\nHere is your daily scripture reading for {book_title} {chapter_num}. Have a great day!")
+    msg.set_content(f"{greeting}, {user_name}!\n\nHere is your daily scripture reading for {book_title} {chapter_num}. Have a great day!")
 
     with open(pdf_path, 'rb') as f:
         pdf_data = f.read()
@@ -148,7 +156,6 @@ def get_recipients_from_sheet():
             email = row[EMAIL_HEADER].strip()
             date_str = row.get(DATE_HEADER, "").strip()
             
-            # Handle missing data (for old form submissions) gracefully
             name = row.get(NAME_HEADER, "").strip()
             if not name:
                 name = "Friend"
@@ -162,11 +169,9 @@ def get_recipients_from_sheet():
             try:
                 start_date = datetime.strptime(date_str, "%m/%d/%Y").date()
                 
-                # Robust AM/PM time parsing
                 if not time_str:
-                    preferred_hour = 6 # Default to 6 AM if blank
+                    preferred_hour = 6
                 else:
-                    # Example: "10:00 PM" becomes 22
                     time_obj = datetime.strptime(time_str, "%I:%M %p")
                     preferred_hour = time_obj.hour
                     
@@ -201,6 +206,9 @@ if __name__ == "__main__":
         book_slug, chapter_num = get_todays_chapter(start_date, volume)
         chapter_key = f"{volume}_{book_slug}_{chapter_num}"
         
+        # Get the dynamic greeting based on the current hour
+        greeting = get_greeting(current_hour)
+        
         print(f"\n--- Processing for {name} ({email}) ---")
         print(f"Volume: {volume} | Assigned reading: {book_slug.capitalize()} {chapter_num}")
         
@@ -211,5 +219,5 @@ if __name__ == "__main__":
             chapter_data = downloaded_chapters[chapter_key]
             
         filename = f"{book_slug}_{chapter_num}.pdf"
-        build_pdf(chapter_data, filename, name)
-        send_email(email, name, filename, chapter_data['bookTitle'], chapter_data['number'])
+        build_pdf(chapter_data, filename, name, greeting)
+        send_email(email, name, greeting, filename, chapter_data['bookTitle'], chapter_data['number'])
