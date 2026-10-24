@@ -14,7 +14,7 @@ SENDER_EMAIL = os.environ.get("MY_EMAIL")
 APP_PASSWORD = os.environ.get("MY_PASSWORD")
 
 # PASTE YOUR GOOGLE SHEET CSV LINK HERE
-SHEET_CSV_URL = "PASTE_YOUR_CSV_LINK_HERE"
+SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSGoyE672gVHNvBmepQTssjlKa1teusxcwkxdMcgxVCDB0zgM5K5G579qQ-EZSw8hTYD6HsEbYWxV4G/pub?output=csv"
 
 PHT = timezone(timedelta(hours=8))
 
